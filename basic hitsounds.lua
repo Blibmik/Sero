@@ -35,6 +35,28 @@ local function getCustomChar(player)
     end
 end
 
+local function getCustomCharRed(player)
+    if not player then
+        return nil
+    end
+    if player.Character then
+        return player.Character
+    else
+        local folder = game.Workspace
+        if folder then
+            for _, child in ipairs(folder:GetChildren()) do
+                if child.ClassName == "Folder" and child.Name == "Characters" then
+                    for _, child2 in ipairs(child:GetChildren()) do
+                        if child2:IsA("Model") and child2.Name == player.Name then
+                            return child2
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
 local function getHP(player)
     local char = getCustomChar(player)
     local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -84,6 +106,8 @@ local function getClosest()
     for _, player in ipairs(players) do
         if player ~= p then
             local customChar = getCustomChar(player)
+            if not customChar then
+                customChar = getCustomCharRed(player)
             local rootPart = customChar and customChar.HumanoidRootPart
             if not rootPart then
                 debugPrint("no HumanoidRootPart for " .. tostring(player.Name))
@@ -105,6 +129,7 @@ local function getClosest()
                 end
             end
         end
+    end
     end
     return closest
 end
