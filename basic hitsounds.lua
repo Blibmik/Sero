@@ -1,191 +1,143 @@
-local cfg = {
-    soundFile = "agpa2.wav",
-    radius = 12,
-    hitmarkerDuration = 400,
-    color = Color3.fromRGB(255, 255, 255),
-    showDamageText = true,
-    damageColor = Color3.fromRGB(255, 60, 60),
-    volume = 1.0,
-    pitch = 1.0,
-    targetFov = 300,
-}
+local p = entity.GetLocalPlayer()
+local sound = "agpa2.wav"
+local previousHealth = {}
+local debugEnabled = true
+local lastDebug = 0
 
-local lastHealth = {}
-local hitmarkers = {}
-local localPlayer = nil
-
-local soundData = nil
-if file and file.exists and file.exists(cfg.soundFile) then
-    soundData = file.read(cfg.soundFile)
-elseif file and file.read then
-    local ok, res = pcall(file.read, cfg.soundFile)
-    if ok and res and #res > 0 then
-        soundData = res
-    end
-end
-
-local function playHitsound()
-    if soundData and #soundData > 0 then
-        pcall(function()
-            audio.PlaySound(soundData, false, cfg.volume, cfg.pitch)
-        end)
-    elseif audio and audio.beep then
-        pcall(function()
-            audio.beep(1200, 60)
-        end)
-    end
-end
-
-local function getLocalPlayer()
-    if entity and entity.GetLocalPlayer then
-        local lp = entity.GetLocalPlayer()
-        if lp then return lp end
-    end
-    if game and game.GetService then
-        local ok, players = pcall(game.GetService, "Players")
-        if ok and players then
-            return players.LocalPlayer
-        end
-    end
-    return nil
-end
-
-local function getHumanoidHealth(player)
-    if not player then return nil end
-
-    local char = player.Character
-    if not char then return nil end
-
-    local hum = nil
-    if char.FindFirstChildOfClass then
-        hum = char:FindFirstChildOfClass("Humanoid")
-    end
-    if not hum and char.FindFirstChild then
-        hum = char:FindFirstChild("Humanoid")
-    end
-    if not hum and char.Humanoid then
-        hum = char.Humanoid
+local function debugPrint(message)
+    if not debugEnabled then
+        return
     end
 
-    if not hum then return nil end
-
-    if hum.Health and type(hum.Health) == "number" then
-        return hum.Health
-    end
-
-    if hum.Address and memory and memory.Read and memory.IsValid then
-        local offsets = { 0x194, 0x18C, 0x190 }
-        for _, offset in ipairs(offsets) do
-            local healthAddr = hum.Address + offset
-            if memory.IsValid(healthAddr) then
-                local hp = memory.Read("float", healthAddr)
-                if hp and hp >= 0 and hp <= 100000 then
-                    return hp
-                end
-            end
-        end
-    end
-
-    return nil
-end
-
-local function spawnHitmarker(screenX, screenY, damage)
     local now = utility.GetTickCount()
-    table.insert(hitmarkers, {
-        x = screenX,
-        y = screenY,
-        startTime = now,
-        damage = damage and math.floor(damage + 0.5) or nil
-    })
+    if now - lastDebug >= 1000 then
+        print("[hitsounds] " .. message)
+        lastDebug = now
+    end
 end
 
-local function onUpdate()
-    localPlayer = getLocalPlayer()
-    if not localPlayer then return end
+local function getCustomChar(player)
+    if not player then
+        return nil
+    end
 
-    local players = entity and entity.GetPlayers and entity.GetPlayers()
-    if not players then return end
-
-    local mousePos = utility.GetMousePos()
-    local mx = mousePos[1] or 0
-    local my = mousePos[2] or 0
-
-    for _, p in ipairs(players) do
-        if p ~= localPlayer then
-            local pName = p.Name or tostring(p)
-            local currentHp = getHumanoidHealth(p)
-
-            if currentHp ~= nil then
-                local prevHp = lastHealth[pName]
-
-                if prevHp ~= nil and currentHp < prevHp then
-                    local diff = prevHp - currentHp
-                    if diff >= 0.5 and prevHp > 0 then
-                        local hitX, hitY = mx, my
-                        local headPos = p.GetBonePosition and p:GetBonePosition("Head")
-                        if headPos then
-                            local sX, sY, onScreen = utility.WorldToScreen(headPos)
-                            if onScreen then
-                                hitX, hitY = sX, sY
-                            end
-                        end
-
-                        playHitsound()
-                        spawnHitmarker(hitX, hitY, diff)
-                    end
-                end
-
-                lastHealth[pName] = currentHp
-            else
-                lastHealth[pName] = nil
+    if player.Character then
+        return player.Character
+    else
+        local folder = game.Workspace
+        if folder then
+            for _, child in ipairs(folder:GetChildren()) do
+                if child:IsA("Model") and child.Name == player.Name then
+                    return child
+                end    
             end
         end
     end
 end
 
-local function onPaint()
-    local now = utility.GetTickCount()
-    local r = cfg.radius
-    local halfR = r / 2
+local function getHP(player)
+    local char = getCustomChar(player)
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum and hum.Address then
+        local healthAddress = hum.Address + 0x190
+        local health = memory.Read("float", healthAddress)
+        print(tostring(health))
+        return health
+    end
+end
 
-    for i = #hitmarkers, 1, -1 do
-        local hm = hitmarkers[i]
-        local elapsed = now - hm.startTime
 
-        if elapsed >= cfg.hitmarkerDuration then
-            table.remove(hitmarkers, i)
+
+
+local function getMouseVals()
+    local mouse = utility.GetMousePos()
+    if not mouse then
+        debugPrint("GetMousePos returned nil")
+        return nil, nil
+    end
+    return mouse[1], mouse[2]
+end
+
+local function playSound(sound)
+    if sound then
+        local soundData = file.read(tostring(sound))
+        if soundData then
+            debugPrint("playing " .. tostring(sound))
+            audio.PlaySound(soundData, false, 1, 1)
         else
-            local progress = elapsed / cfg.hitmarkerDuration
-            local alpha = 1.0 - progress
-            local x = hm.x
-            local y = hm.y
-
-            draw.Line(x - r, y - r, x - halfR, y - halfR, cfg.color, 2)
-            draw.Line(x + r, y - r, x + halfR, y - halfR, cfg.color, 2)
-            draw.Line(x - r, y + r, x - halfR, y + halfR, cfg.color, 2)
-            draw.Line(x + r, y + r, x + halfR, y + halfR, cfg.color, 2)
-
-            if cfg.showDamageText and hm.damage and hm.damage > 0 then
-                local offsetY = math.floor(progress * 25)
-                draw.TextOutlined(
-                    "-" .. tostring(hm.damage),
-                    x + r + 4,
-                    y - halfR - offsetY,
-                    cfg.damageColor,
-                    "Verdana"
-                )
-            end
+            debugPrint("file.read failed for " .. tostring(sound))
         end
     end
 end
 
-local function onNewPlace()
-    lastHealth = {}
-    hitmarkers = {}
+local function getClosest()
+    local closest = nil
+    local closestDist = math.huge
+    local mouseX, mouseY = getMouseVals()
+    if not mouseX or not mouseY then
+        return nil
+    end
+
+    local players = entity.GetPlayers()
+    debugPrint("players=" .. tostring(#players) .. ", mouse=" .. tostring(mouseX) .. "," .. tostring(mouseY))
+
+    for _, player in ipairs(players) do
+        if player ~= p then
+            local customChar = getCustomChar(player)
+            local rootPart = customChar and customChar.HumanoidRootPart
+            if not rootPart then
+                debugPrint("no HumanoidRootPart for " .. tostring(player.Name))
+            end
+
+            if rootPart then
+                local screenX, screenY, onScreen = utility.WorldToScreen(rootPart.Position)
+                if onScreen then
+                local dx = mouseX - screenX
+                local dy = mouseY - screenY
+                local dist = math.sqrt(dx * dx + dy * dy)
+                if dist < closestDist then
+                    closestDist = dist
+                    closest = player
+                    debugPrint("closest=" .. tostring(closest.Name) .. ", distance=" .. tostring(dist))
+                end
+                else
+                    debugPrint(tostring(player.Name) .. " is off screen")
+                end
+            end
+        end
+    end
+    return closest
 end
 
-cheat.Register("onUpdate", onUpdate)
-cheat.Register("paint", onPaint)
-cheat.Register("newPlace", onNewPlace)
+local function trackClosest()
+    local closest = getClosest()
+    if closest then
+        local health = getHP(closest)
+        if health then
+            local playerName = tostring(closest.Name)
+            local previous = previousHealth[playerName]
+            debugPrint(playerName .. " health=" .. tostring(health) .. ", previous=" .. tostring(previous))
+            if previous and health < previous then
+                print("[hitsounds] damage detected on " .. playerName .. ": " .. tostring(previous - health))
+                playSound(sound)
+            end
+            previousHealth[playerName] = health
+        else
+            debugPrint("health read failed for " .. tostring(closest.Name))
+        end
+    else
+        debugPrint("no target found")
+    end
+end
 
--- yappy testificate ##
+local function on_update()
+    p = entity.GetLocalPlayer()
+    if not p then
+        debugPrint("local player unavailable")
+        return
+    end
+    trackClosest()
+end
+
+cheat.register("onUpdate", on_update)
+print("[hitsounds] loaded; debug=" .. tostring(debugEnabled))
