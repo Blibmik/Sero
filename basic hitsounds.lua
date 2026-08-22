@@ -1,22 +1,19 @@
--- Universal Serotonin Hitsounds & Hitmarkers
 local cfg = {
     soundFile = "agpa2.wav",
-    radius = 12,                  -- Hitmarker line size
-    hitmarkerDuration = 400,      -- Duration in milliseconds to show hitmarker
+    radius = 12,
+    hitmarkerDuration = 400,
     color = Color3.fromRGB(255, 255, 255),
     showDamageText = true,
     damageColor = Color3.fromRGB(255, 60, 60),
     volume = 1.0,
     pitch = 1.0,
-    targetFov = 300,              -- Max screen distance from crosshair to track target
+    targetFov = 300,
 }
 
--- State tables
 local lastHealth = {}
 local hitmarkers = {}
 local localPlayer = nil
 
--- Safely load sound file from C:\Serotonin\files\
 local soundData = nil
 if file and file.exists and file.exists(cfg.soundFile) then
     soundData = file.read(cfg.soundFile)
@@ -27,7 +24,6 @@ elseif file and file.read then
     end
 end
 
--- Safe sound player
 local function playHitsound()
     if soundData and #soundData > 0 then
         pcall(function()
@@ -40,7 +36,6 @@ local function playHitsound()
     end
 end
 
--- Get Local Player safely
 local function getLocalPlayer()
     if entity and entity.GetLocalPlayer then
         local lp = entity.GetLocalPlayer()
@@ -81,7 +76,7 @@ local function getHumanoidHealth(player)
     if hum.Address and memory and memory.Read and memory.IsValid then
         local offsets = { 0x194, 0x18C, 0x190 }
         for _, offset in ipairs(offsets) do
-            local healthAddr = hum.Address + 0x194
+            local healthAddr = hum.Address + offset
             if memory.IsValid(healthAddr) then
                 local hp = memory.Read("float", healthAddr)
                 if hp and hp >= 0 and hp <= 100000 then
@@ -125,9 +120,7 @@ local function onUpdate()
 
                 if prevHp ~= nil and currentHp < prevHp then
                     local diff = prevHp - currentHp
-                    -- Filter out respawns / minuscule float jitter
                     if diff >= 0.5 and prevHp > 0 then
-                        -- Determine hitmarker screen position
                         local hitX, hitY = mx, my
                         local headPos = p.GetBonePosition and p:GetBonePosition("Head")
                         if headPos then
@@ -144,14 +137,12 @@ local function onUpdate()
 
                 lastHealth[pName] = currentHp
             else
-                -- Reset when character is dead/gone
                 lastHealth[pName] = nil
             end
         end
     end
 end
 
--- Rendering loop (per frame)
 local function onPaint()
     local now = utility.GetTickCount()
     local r = cfg.radius
@@ -169,17 +160,11 @@ local function onPaint()
             local x = hm.x
             local y = hm.y
 
-            -- Draw COD-style 4 diagonal lines: \ /
-            -- Top-Left
             draw.Line(x - r, y - r, x - halfR, y - halfR, cfg.color, 2)
-            -- Top-Right
             draw.Line(x + r, y - r, x + halfR, y - halfR, cfg.color, 2)
-            -- Bottom-Left
             draw.Line(x - r, y + r, x - halfR, y + halfR, cfg.color, 2)
-            -- Bottom-Right
             draw.Line(x + r, y + r, x + halfR, y + halfR, cfg.color, 2)
 
-            -- Optional damage text floating upward
             if cfg.showDamageText and hm.damage and hm.damage > 0 then
                 local offsetY = math.floor(progress * 25)
                 draw.TextOutlined(
@@ -194,14 +179,11 @@ local function onPaint()
     end
 end
 
--- Reset state on place change / teleport
 local function onNewPlace()
     lastHealth = {}
     hitmarkers = {}
 end
 
--- Register cheat event hooks
 cheat.Register("onUpdate", onUpdate)
 cheat.Register("paint", onPaint)
 cheat.Register("newPlace", onNewPlace)
-
