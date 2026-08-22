@@ -187,3 +187,5 @@ end
 cheat.Register("onUpdate", onUpdate)
 cheat.Register("paint", onPaint)
 cheat.Register("newPlace", onNewPlace)
+
+-- yappy testificate ##
