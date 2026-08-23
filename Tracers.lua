@@ -163,7 +163,7 @@ cheat.register("onPaint", function()
 
     for _, t in ipairs(targets) do
         local sx, sy, on = utility.WorldToScreen(t.pos)
-        if on then
+        if on and keyboard.IsPressed("leftmouse") then
             local col = t.visible and CONFIG.visibleColor or CONFIG.hiddenColor
             draw.Line(sx0, sy0, sx, sy, col, CONFIG.thickness)
             if CONFIG.showEndDot then
